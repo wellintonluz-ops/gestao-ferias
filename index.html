@@ -8,6 +8,7 @@
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     
     <style>
         * {
@@ -725,10 +726,14 @@
         const VALID_PASSWORD = "Wellinton7842";
 
         // Check if user is logged in
-        function checkAuth() {
+        async function checkAuth() {
             const isLoggedIn = sessionStorage.getItem('isLoggedIn');
             if (isLoggedIn === 'true') {
                 showApp();
+                // Ensure we are authenticated in Firebase before loading data
+                await authReady;
+                await loadEmployees();
+                await loadVacations();
             } else {
                 showLogin();
             }
@@ -755,7 +760,7 @@
         }
 
         // Login form submission
-        document.getElementById('loginForm').addEventListener('submit', function(e) {
+        document.getElementById('loginForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
             const username = document.getElementById('username').value;
@@ -767,9 +772,10 @@
                 errorMsg.classList.remove('show');
                 showApp();
                 
-                // Load data after login
-                loadEmployees();
-                loadVacations();
+                // Load data after login (wait for Firebase auth)
+                await authReady;
+                await loadEmployees();
+                await loadVacations();
             } else {
                 errorMsg.classList.add('show');
                 document.getElementById('password').value = '';
@@ -790,6 +796,20 @@
         // Initialize Firebase
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
+
+        // Ensure we have a Firebase auth user (anonymous) for Firestore rules that require auth
+        let authResolve;
+        const authReady = new Promise(resolve => { authResolve = resolve; });
+
+        firebase.auth().onAuthStateChanged(user => {
+            if (user) {
+                authResolve(user);
+            } else {
+                firebase.auth().signInAnonymously().catch(error => {
+                    console.error('Erro ao autenticar anonimamente no Firebase:', error);
+                });
+            }
+        });
 
         let employees = [];
         let vacations = [];
